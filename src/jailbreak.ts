@@ -83,10 +83,14 @@ export function listJailbreaks(): JailbreakFileEntry[] {
   }))
 }
 
-/** Read one wordbook file by name. */
+/** Read one wordbook file by name. A missing file yields an empty section. */
 export function readJailbreak(file: string): string {
   const safe = safeFileName(file)
-  return readFileSync(join(JAILBREAK_DIR, safe), 'utf8')
+  try {
+    return readFileSync(join(JAILBREAK_DIR, safe), 'utf8')
+  } catch {
+    return ''
+  }
 }
 
 /** Write one wordbook file by name. The target must already exist. */

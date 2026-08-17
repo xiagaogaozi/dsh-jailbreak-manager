@@ -22,7 +22,7 @@ npm pack
 
 # 复制到 DSH Desktop profile 的 local-plugins
 # 并在 C:\Users\ASUS\.dsh\profiles\desktop\package.json 中：
-#   dependencies: "dsh-jailbreak-manager": "file:local-plugins/dsh-jailbreak-manager/dsh-jailbreak-manager-0.1.1.tgz"
+#   dependencies: "dsh-jailbreak-manager": "file:local-plugins/dsh-jailbreak-manager/dsh-jailbreak-manager-0.1.2.tgz"
 #   dsh.profile.bundles: 增加 "dsh-jailbreak-manager"
 ```
 
