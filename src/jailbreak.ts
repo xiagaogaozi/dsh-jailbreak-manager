@@ -17,7 +17,9 @@ import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 /** Settings namespace for the manager's mode/model selection. */
 export const CONFIG_NS = settingsNamespace('dsh-jailbreak-manager')
 
-/** Persisted user selection: `auto` = follow the active agent's model. */
+/** Persisted user selection: `off` = disabled, `auto` = follow the active agent's model. */
+export type ManagerMode = 'off' | 'auto' | 'manual'
+
 export const CONFIG_SCHEMA = z.object({
   mode: z.string().default('auto'),
   model: z.string().default(''),
@@ -48,7 +50,7 @@ export function modelKeyFromRoute(route?: Partial<AgentOptions>): ModelKey {
 
 /** Resolve the wordbook key from config + the active agent route. */
 export function resolveModelKey(
-  config: { mode: 'auto' | 'manual'; model: string },
+  config: { mode: ManagerMode; model: string },
   route?: Partial<AgentOptions>,
 ): ModelKey {
   if (config.mode === 'manual') {

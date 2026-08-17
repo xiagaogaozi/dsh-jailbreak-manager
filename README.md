@@ -4,6 +4,7 @@ DSH Desktop 破限词管理器插件：在 deepseek / claude / gemini / glm 之�
 
 ## 功能
 
+- **关闭**：设置页选择 `关闭` 后完全不注入破限词。
 - **自动匹配**：读取当前会话 agent 实际使用的 provider/model，按模型名映射到 `jailbreaks/` 下的词库文件。
 - **手动优先**：设置页选择 `手动 + 模型` 后固定使用该模型词库；选 `自动` 时跟随当前会话。
 - **可编辑词库**：设置页可直接编辑 `jailbreaks/*.md`，保存后下次对话请求即重新读取，无需重启。
@@ -22,7 +23,7 @@ npm pack
 
 # 复制到 DSH Desktop profile 的 local-plugins
 # 并在 C:\Users\ASUS\.dsh\profiles\desktop\package.json 中：
-#   dependencies: "dsh-jailbreak-manager": "file:local-plugins/dsh-jailbreak-manager/dsh-jailbreak-manager-0.1.2.tgz"
+#   dependencies: "dsh-jailbreak-manager": "file:local-plugins/dsh-jailbreak-manager/dsh-jailbreak-manager-0.1.3.tgz"
 #   dsh.profile.bundles: 增加 "dsh-jailbreak-manager"
 ```
 
@@ -31,7 +32,7 @@ npm pack
 ## 使用
 
 1. 打开 设置 → **破限词**。
-2. 模型匹配选择 `自动` 或某个固定模型。
+2. 模型匹配选择 `关闭` / `自动` / 某个固定模型。
 3. 在词库文件列表选择 `deepseek.md` / `claude.md` / `gemini.md` / `glm.md`。
 4. 编辑内容并保存；下次对话请求生效。
 

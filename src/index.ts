@@ -22,6 +22,7 @@ import {
   readJailbreak,
   resolveModelKey,
   writeJailbreak,
+  type ManagerMode,
 } from './jailbreak.ts'
 
 /** Web-server service key candidates, newest first. */
@@ -69,19 +70,20 @@ export const Config: z<Config> = z.object({
 
 /** The resolved jailbreak section text for one prompt assembly. */
 function jailbreakSectionText(
-  config: { mode: 'auto' | 'manual'; model: string },
+  config: { mode: ManagerMode; model: string },
   route: { provider?: string; model?: string } | undefined,
 ): string {
+  if (config.mode === 'off') return ''
   const key = resolveModelKey(config, route)
   return readJailbreak(`${key}.md`)
 }
 
 export function apply(ctx: Context, config: Config): void {
   const configScope = ctx.settings.register(CONFIG_NS, CONFIG_SCHEMA)
-  const loadConfig = (): { mode: 'auto' | 'manual'; model: string } => {
-    const value = configScope.get() as { mode?: 'auto' | 'manual'; model?: string } | undefined
+  const loadConfig = (): { mode: ManagerMode; model: string } => {
+    const value = configScope.get() as { mode?: ManagerMode; model?: string } | undefined
     return {
-      mode: value?.mode === 'manual' ? 'manual' : 'auto',
+      mode: value?.mode === 'off' ? 'off' : value?.mode === 'manual' ? 'manual' : 'auto',
       model: typeof value?.model === 'string' ? value.model : '',
     }
   }
@@ -126,8 +128,8 @@ export function apply(ctx: Context, config: Config): void {
           }
           const mode = (body as { mode?: unknown } | null)?.mode
           const model = (body as { model?: unknown } | null)?.model
-          if (mode !== 'auto' && mode !== 'manual') {
-            writeJson(res, 400, { ok: false, error: 'mode must be "auto" or "manual"' })
+          if (mode !== 'off' && mode !== 'auto' && mode !== 'manual') {
+            writeJson(res, 400, { ok: false, error: 'mode must be "off", "auto" or "manual"' })
             return
           }
           if (typeof model !== 'string' || (mode === 'manual' && !['deepseek', 'claude', 'gemini', 'glm'].includes(model))) {

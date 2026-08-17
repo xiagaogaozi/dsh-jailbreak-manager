@@ -42,7 +42,7 @@ async function apiPost(path: string, body: unknown): Promise<unknown> {
 
 /** Persisted model selection, mirrors the host config schema. */
 interface ManagerConfig {
-  mode: 'auto' | 'manual'
+  mode: 'off' | 'auto' | 'manual'
   model: string
 }
 
@@ -57,8 +57,9 @@ interface JailbreakList {
   files: JailbreakFile[]
 }
 
-const MODEL_OPTIONS = ['auto', 'deepseek', 'claude', 'gemini', 'glm'] as const
+const MODEL_OPTIONS = ['off', 'auto', 'deepseek', 'claude', 'gemini', 'glm'] as const
 const MODEL_LABELS: Record<string, string> = {
+  off: '关闭',
   auto: '自动',
   deepseek: 'DeepSeek',
   claude: 'Claude',
@@ -158,9 +159,11 @@ export function JailbreakManagerPage(): JSX.Element {
   }
 
   const onModelChange = (id: string): void => {
-    const next: ManagerConfig = id === 'auto'
-      ? { mode: 'auto', model: '' }
-      : { mode: 'manual', model: id }
+    const next: ManagerConfig = id === 'off'
+      ? { mode: 'off', model: '' }
+      : id === 'auto'
+        ? { mode: 'auto', model: '' }
+        : { mode: 'manual', model: id }
     void saveConfig(next)
   }
 
@@ -201,10 +204,10 @@ export function JailbreakManagerPage(): JSX.Element {
       <div className={css.row}>
         <div className={css.rowText}>
           <div className={css.title}>模型匹配</div>
-          <div className={css.desc}>自动 = 跟随当前会话实际使用的 provider/model；手动 = 固定使用所选词库</div>
+          <div className={css.desc}>关闭 = 不注入破限词；自动 = 跟随当前会话实际使用的 provider/model；手动 = 固定使用所选词库</div>
         </div>
         <ModelSelector
-          value={config.mode === 'manual' ? config.model : 'auto'}
+          value={config.mode === 'manual' ? config.model : config.mode}
           onChange={onModelChange}
           disabled={busy}
         />
