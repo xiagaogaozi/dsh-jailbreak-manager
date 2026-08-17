@@ -1,0 +1,8 @@
+# dsh-jailbreak-manager bundle patch: mounts the jailbreak-manager plugin into
+# the host composition of a dsh profile. The plugin registers an early
+# systemPrompt.section whose text is re-evaluated on every prompt assembly,
+# plus the settings-page HTTP routes and the client settings page.
+- insert:
+    - id: dsh-jailbreak-manager
+      name: 'dsh-jailbreak-manager'
+      config: {}
