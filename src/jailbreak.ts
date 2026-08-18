@@ -20,44 +20,57 @@ export const CONFIG_NS = settingsNamespace('dsh-jailbreak-manager')
 /** Persisted user selection: `off` = disabled, `auto` = follow the active agent's model. */
 export type ManagerMode = 'off' | 'auto' | 'manual'
 
+/** Default fallback when no known model keyword matches. */
+export const DEFAULT_FALLBACK = 'deepseek'
+
 export const CONFIG_SCHEMA = z.object({
   mode: z.string().default('auto'),
   model: z.string().default(''),
+  fallback: z.string().default(DEFAULT_FALLBACK),
 })
 
-/** The four supported model families. */
-export type ModelKey = 'deepseek' | 'claude' | 'gemini' | 'glm'
+/** A model key is the lower-case `.md` file base name, e.g. `claude`. */
+export type ModelKey = string
 
-/** Public model-family metadata shown in the settings UI. */
-export const MODEL_KEYS: readonly ModelKey[] = ['deepseek', 'claude', 'gemini', 'glm']
+/** Built-in model keys shipped with the plugin. */
+export const DEFAULT_MODEL_KEYS: readonly ModelKey[] = ['deepseek', 'claude', 'gemini', 'glm']
 
-/** File name for each model family. */
-export const MODEL_FILES: Record<ModelKey, string> = {
-  deepseek: 'deepseek.md',
-  claude: 'claude.md',
-  gemini: 'gemini.md',
-  glm: 'glm.md',
-}
+/** Matching precedence for built-ins; custom keys are checked after them. */
+const MATCH_PRECEDENCE: readonly ModelKey[] = ['claude', 'gemini', 'glm', 'deepseek']
 
-/** Resolve the model family from an agent's provider/model route. */
-export function modelKeyFromRoute(route?: Partial<AgentOptions>): ModelKey {
+/**
+ * Resolve the model family from an agent's provider/model route.
+ * Matching is case-insensitive and keyword-based: if the combined route text
+ * contains a known model key, that key wins. Unknown routes use `fallback`.
+ */
+export function modelKeyFromRoute(
+  route: Partial<AgentOptions> | undefined,
+  knownKeys: readonly ModelKey[],
+  fallback: ModelKey,
+): ModelKey {
   const text = `${route?.provider ?? ''} ${route?.model ?? ''}`.toLowerCase()
-  if (text.includes('claude')) return 'claude'
-  if (text.includes('gemini')) return 'gemini'
-  if (text.includes('glm')) return 'glm'
-  return 'deepseek'
+  const orderedKeys = [
+    ...MATCH_PRECEDENCE.filter((key) => knownKeys.includes(key)),
+    ...knownKeys.filter((key) => !MATCH_PRECEDENCE.includes(key)).sort(),
+  ]
+  for (const key of orderedKeys) {
+    if (key !== '' && text.includes(key)) return key
+  }
+  if (knownKeys.includes(fallback)) return fallback
+  return knownKeys[0] ?? DEFAULT_FALLBACK
 }
 
 /** Resolve the wordbook key from config + the active agent route. */
 export function resolveModelKey(
-  config: { mode: ManagerMode; model: string },
-  route?: Partial<AgentOptions>,
+  config: { mode: ManagerMode; model: string; fallback: ModelKey },
+  route: Partial<AgentOptions> | undefined,
+  knownKeys: readonly ModelKey[],
 ): ModelKey {
   if (config.mode === 'manual') {
-    const manual = MODEL_KEYS.find((key) => key === config.model)
+    const manual = knownKeys.find((key) => key === config.model)
     if (manual !== undefined) return manual
   }
-  return modelKeyFromRoute(route)
+  return modelKeyFromRoute(route, knownKeys, config.fallback)
 }
 
 /** One jailbreak wordbook file entry exposed by the settings HTTP API. */
@@ -73,16 +86,24 @@ export interface JailbreakFileEntry {
 /** Absolute path to the plugin's `jailbreaks/` directory. */
 export const JAILBREAK_DIR = fileURLToPath(new URL('../jailbreaks/', import.meta.url))
 
+/** List all wordbook model keys (lower-case file base names). */
+export function listModelKeys(): ModelKey[] {
+  return readdirSync(JAILBREAK_DIR)
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => basename(name, '.md').toLowerCase())
+    .sort()
+}
+
 /** Read the current wordbook file list, including contents. */
 export function listJailbreaks(): JailbreakFileEntry[] {
-  const names = readdirSync(JAILBREAK_DIR)
-    .filter((name) => name.endsWith('.md'))
-    .sort()
-  return names.map((name) => ({
-    file: name,
-    model: modelKeyForFile(name),
-    content: readFileSync(join(JAILBREAK_DIR, name), 'utf8'),
-  }))
+  return listModelKeys().map((key) => {
+    const file = `${key}.md`
+    return {
+      file,
+      model: key,
+      content: readFileSync(join(JAILBREAK_DIR, file), 'utf8'),
+    }
+  })
 }
 
 /** Read one wordbook file by name. A missing file yields an empty section. */
@@ -95,28 +116,20 @@ export function readJailbreak(file: string): string {
   }
 }
 
-/** Write one wordbook file by name. The target must already exist. */
+/**
+ * Write one wordbook file by name. The file may already exist (edit) or be a
+ * brand-new model added from the settings page.
+ */
 export function writeJailbreak(file: string, content: string): void {
   const safe = safeFileName(file)
-  const target = join(JAILBREAK_DIR, safe)
-  const existing = readdirSync(JAILBREAK_DIR)
-  if (!existing.includes(safe)) {
-    throw new Error(`unknown jailbreak file: ${safe}`)
-  }
-  writeFileSync(target, content, 'utf8')
+  writeFileSync(join(JAILBREAK_DIR, safe), content, 'utf8')
 }
 
 /** Reject path traversal and non-md names before touching the filesystem. */
 function safeFileName(file: string): string {
-  const name = basename(file)
-  if (name !== file || !/^[a-z0-9_-]+\.md$/i.test(name)) {
+  const name = basename(file).toLowerCase()
+  if (name !== file.toLowerCase() || !/^[a-z0-9_-]+\.md$/.test(name)) {
     throw new Error('invalid jailbreak file name')
   }
   return name
-}
-
-/** Best-effort model family for an arbitrary `.md` file name. */
-function modelKeyForFile(file: string): string {
-  const base = basename(file, '.md') as string
-  return MODEL_KEYS.includes(base as ModelKey) ? base : base
 }

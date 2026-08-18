@@ -64,6 +64,19 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.addInput {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+
+
 /* Menu wraps the anchor in its own root span, which is the real flex child
  * of the row — it fills the row, and the pill fills it. */
 .selectorWrap {

@@ -18,11 +18,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   CONFIG_NS,
   CONFIG_SCHEMA,
+  DEFAULT_FALLBACK,
   listJailbreaks,
+  listModelKeys,
   readJailbreak,
   resolveModelKey,
   writeJailbreak,
   type ManagerMode,
+  type ModelKey,
 } from './jailbreak.ts'
 
 /** Web-server service key candidates, newest first. */
@@ -70,21 +73,29 @@ export const Config: z<Config> = z.object({
 
 /** The resolved jailbreak section text for one prompt assembly. */
 function jailbreakSectionText(
-  config: { mode: ManagerMode; model: string },
+  config: { mode: ManagerMode; model: string; fallback: ModelKey },
   route: { provider?: string; model?: string } | undefined,
 ): string {
   if (config.mode === 'off') return ''
-  const key = resolveModelKey(config, route)
+  const knownKeys = listModelKeys()
+  const key = resolveModelKey(config, route, knownKeys)
   return readJailbreak(`${key}.md`)
 }
 
 export function apply(ctx: Context, config: Config): void {
   const configScope = ctx.settings.register(CONFIG_NS, CONFIG_SCHEMA)
-  const loadConfig = (): { mode: ManagerMode; model: string } => {
-    const value = configScope.get() as { mode?: ManagerMode; model?: string } | undefined
+  const loadConfig = (): { mode: ManagerMode; model: string; fallback: ModelKey } => {
+    const value = configScope.get() as { mode?: ManagerMode; model?: string; fallback?: ModelKey } | undefined
+    const knownKeys = listModelKeys()
+    const fallback = typeof value?.fallback === 'string' && knownKeys.includes(value.fallback)
+      ? value.fallback
+      : knownKeys.includes(DEFAULT_FALLBACK)
+        ? DEFAULT_FALLBACK
+        : knownKeys[0] ?? DEFAULT_FALLBACK
     return {
       mode: value?.mode === 'off' ? 'off' : value?.mode === 'manual' ? 'manual' : 'auto',
       model: typeof value?.model === 'string' ? value.model : '',
+      fallback,
     }
   }
 
@@ -126,17 +137,22 @@ export function apply(ctx: Context, config: Config): void {
             writeJson(res, 400, { ok: false, error: 'invalid JSON body' })
             return
           }
+          const knownKeys = listModelKeys()
           const mode = (body as { mode?: unknown } | null)?.mode
           const model = (body as { model?: unknown } | null)?.model
+          const fallbackValue = (body as { fallback?: unknown } | null)?.fallback
           if (mode !== 'off' && mode !== 'auto' && mode !== 'manual') {
             writeJson(res, 400, { ok: false, error: 'mode must be "off", "auto" or "manual"' })
             return
           }
-          if (typeof model !== 'string' || (mode === 'manual' && !['deepseek', 'claude', 'gemini', 'glm'].includes(model))) {
-            writeJson(res, 400, { ok: false, error: 'model must be one of deepseek/claude/gemini/glm' })
+          if (typeof model !== 'string' || (mode === 'manual' && !knownKeys.includes(model))) {
+            writeJson(res, 400, { ok: false, error: `model must be one of ${knownKeys.join('/')}` })
             return
           }
-          await configScope.replace({ mode, model: mode === 'manual' ? model : '' })
+          const fallback = typeof fallbackValue === 'string' && knownKeys.includes(fallbackValue)
+            ? fallbackValue
+            : loadConfig().fallback
+          await configScope.replace({ mode, model: mode === 'manual' ? model : '', fallback })
           writeJson(res, 200, { ok: true, config: loadConfig() })
         },
       })

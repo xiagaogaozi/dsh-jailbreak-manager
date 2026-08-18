@@ -1,6 +1,6 @@
 {
   "name": "dsh-jailbreak-manager",
-  "version": "0.1.3",
+  "version": "0.2.1",
   "description": "DSH Desktop 破限词管理器：按模型自动/手动注入对应 jailbreak prompt，词库为可编辑 md 文件",
   "type": "module",
   "main": "lib/index.js",
