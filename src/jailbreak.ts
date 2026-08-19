@@ -23,10 +23,14 @@ export type ManagerMode = 'off' | 'auto' | 'manual'
 /** Default fallback when no known model keyword matches. */
 export const DEFAULT_FALLBACK = 'deepseek'
 
+/** Persisted wordbook contents keyed by file name, e.g. `claude.md`. */
+export type JailbreakStore = Record<string, string>
+
 export const CONFIG_SCHEMA = z.object({
   mode: z.string().default('auto'),
   model: z.string().default(''),
   fallback: z.string().default(DEFAULT_FALLBACK),
+  jailbreaks: z.dict(z.string()).default({}),
 })
 
 /** A model key is the lower-case `.md` file base name, e.g. `claude`. */
@@ -87,28 +91,30 @@ export interface JailbreakFileEntry {
 export const JAILBREAK_DIR = fileURLToPath(new URL('../jailbreaks/', import.meta.url))
 
 /** List all wordbook model keys (lower-case file base names). */
-export function listModelKeys(): ModelKey[] {
-  return readdirSync(JAILBREAK_DIR)
+export function listModelKeys(stored?: JailbreakStore): ModelKey[] {
+  const fromDisk = readdirSync(JAILBREAK_DIR)
     .filter((name) => name.endsWith('.md'))
     .map((name) => basename(name, '.md').toLowerCase())
-    .sort()
+  const fromStore = stored !== undefined ? Object.keys(stored).map((name) => basename(name, '.md').toLowerCase()) : []
+  return [...new Set([...fromDisk, ...fromStore])].sort()
 }
 
 /** Read the current wordbook file list, including contents. */
-export function listJailbreaks(): JailbreakFileEntry[] {
-  return listModelKeys().map((key) => {
+export function listJailbreaks(stored?: JailbreakStore): JailbreakFileEntry[] {
+  return listModelKeys(stored).map((key) => {
     const file = `${key}.md`
     return {
       file,
       model: key,
-      content: readFileSync(join(JAILBREAK_DIR, file), 'utf8'),
+      content: readJailbreak(file, stored),
     }
   })
 }
 
-/** Read one wordbook file by name. A missing file yields an empty section. */
-export function readJailbreak(file: string): string {
+/** Read one wordbook file by name. Persisted settings content wins. */
+export function readJailbreak(file: string, stored?: JailbreakStore): string {
   const safe = safeFileName(file)
+  if (stored !== undefined && typeof stored[safe] === 'string') return stored[safe]!
   try {
     return readFileSync(join(JAILBREAK_DIR, safe), 'utf8')
   } catch {

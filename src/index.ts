@@ -24,6 +24,7 @@ import {
   readJailbreak,
   resolveModelKey,
   writeJailbreak,
+  type JailbreakStore,
   type ManagerMode,
   type ModelKey,
 } from './jailbreak.ts'
@@ -73,20 +74,21 @@ export const Config: z<Config> = z.object({
 
 /** The resolved jailbreak section text for one prompt assembly. */
 function jailbreakSectionText(
-  config: { mode: ManagerMode; model: string; fallback: ModelKey },
+  config: { mode: ManagerMode; model: string; fallback: ModelKey; jailbreaks: JailbreakStore },
   route: { provider?: string; model?: string } | undefined,
 ): string {
   if (config.mode === 'off') return ''
-  const knownKeys = listModelKeys()
+  const knownKeys = listModelKeys(config.jailbreaks)
   const key = resolveModelKey(config, route, knownKeys)
-  return readJailbreak(`${key}.md`)
+  return readJailbreak(`${key}.md`, config.jailbreaks)
 }
 
 export function apply(ctx: Context, config: Config): void {
   const configScope = ctx.settings.register(CONFIG_NS, CONFIG_SCHEMA)
-  const loadConfig = (): { mode: ManagerMode; model: string; fallback: ModelKey } => {
-    const value = configScope.get() as { mode?: ManagerMode; model?: string; fallback?: ModelKey } | undefined
-    const knownKeys = listModelKeys()
+  const loadConfig = (): { mode: ManagerMode; model: string; fallback: ModelKey; jailbreaks: JailbreakStore } => {
+    const value = configScope.get() as { mode?: ManagerMode; model?: string; fallback?: ModelKey; jailbreaks?: JailbreakStore } | undefined
+    const jailbreaks = value?.jailbreaks ?? {}
+    const knownKeys = listModelKeys(jailbreaks)
     const fallback = typeof value?.fallback === 'string' && knownKeys.includes(value.fallback)
       ? value.fallback
       : knownKeys.includes(DEFAULT_FALLBACK)
@@ -96,6 +98,7 @@ export function apply(ctx: Context, config: Config): void {
       mode: value?.mode === 'off' ? 'off' : value?.mode === 'manual' ? 'manual' : 'auto',
       model: typeof value?.model === 'string' ? value.model : '',
       fallback,
+      jailbreaks,
     }
   }
 
@@ -149,10 +152,11 @@ export function apply(ctx: Context, config: Config): void {
             writeJson(res, 400, { ok: false, error: `model must be one of ${knownKeys.join('/')}` })
             return
           }
+          const current = loadConfig()
           const fallback = typeof fallbackValue === 'string' && knownKeys.includes(fallbackValue)
             ? fallbackValue
-            : loadConfig().fallback
-          await configScope.replace({ mode, model: mode === 'manual' ? model : '', fallback })
+            : current.fallback
+          await configScope.replace({ mode, model: mode === 'manual' ? model : '', fallback, jailbreaks: current.jailbreaks })
           writeJson(res, 200, { ok: true, config: loadConfig() })
         },
       })
@@ -161,7 +165,7 @@ export function apply(ctx: Context, config: Config): void {
         path: `${ROUTE_BASE}/jailbreaks`,
         handler: async (req, res) => {
           if (req.method === 'GET') {
-            writeJson(res, 200, { files: listJailbreaks() })
+            writeJson(res, 200, { files: listJailbreaks(loadConfig().jailbreaks) })
             return
           }
           if (req.method !== 'POST') {
@@ -188,7 +192,11 @@ export function apply(ctx: Context, config: Config): void {
             writeJson(res, 400, { ok: false, error: err instanceof Error ? err.message : String(err) })
             return
           }
-          writeJson(res, 200, { ok: true, file, size: content.length })
+          const current = loadConfig()
+          const storeFile = file.toLowerCase()
+          const nextJailbreaks = { ...current.jailbreaks, [storeFile]: content }
+          await configScope.replace({ ...current, jailbreaks: nextJailbreaks })
+          writeJson(res, 200, { ok: true, file: storeFile, size: content.length })
         },
       })
       return () => {
